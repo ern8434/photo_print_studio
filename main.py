@@ -56,7 +56,8 @@ class PhotoPrintApp(ctk.CTk):
         self.title_label.pack(pady=(20, 20))
 
         # --- Resim Seçimi ---
-        self.img_btn = ctk.CTkButton(self.left_frame, text="Vesikalık Resim Seç", command=self.select_image)
+        self.img_btn = ctk.CTkButton(self.left_frame, text="Vesikalık Resim Seç", command=self.select_image, 
+                                     height=50, font=ctk.CTkFont(size=15, weight="bold"))
         self.img_btn.pack(pady=10, padx=20, fill="x")
 
         self.img_status_label = ctk.CTkLabel(self.left_frame, text="Henüz resim seçilmedi", font=ctk.CTkFont(size=12, slant="italic"))
@@ -90,19 +91,25 @@ class PhotoPrintApp(ctk.CTk):
         self.max_count_label = ctk.CTkLabel(self.left_frame, text="Max: 1 adet sığabilir", text_color="gray", font=ctk.CTkFont(size=11))
         self.max_count_label.pack(pady=(0, 20), anchor="w", padx=20)
         
-        # Alt bölme için boşluk
-        self.spacer = ctk.CTkFrame(self.left_frame, fg_color="transparent")
-        self.spacer.pack(fill="both", expand=True)
-
         # --- İşlem Butonları (Kaydet / Yazdır) ---
+        # Önce alt buton çerçevesini yerleştiriyoruz, böylece spacer tüm boşluğu kaplamadan alt taraf garantiye alınır
         self.action_frame = ctk.CTkFrame(self.left_frame, fg_color="transparent")
         self.action_frame.pack(side="bottom", fill="x", pady=20, padx=20)
+        
+        self.action_frame.grid_columnconfigure(0, weight=1)
+        self.action_frame.grid_columnconfigure(1, weight=1)
 
-        self.save_btn = ctk.CTkButton(self.action_frame, text="Yüksek Kalite\nKaydet (JPG)", command=self.save_final_image, fg_color="#2b7b46", hover_color="#1f5c34")
-        self.save_btn.pack(side="left", fill="x", expand=True, padx=(0, 5))
+        self.save_btn = ctk.CTkButton(self.action_frame, text="Yüksek Kalite\nKaydet (JPG)", command=self.save_final_image, 
+                                      fg_color="#2b7b46", hover_color="#1f5c34", height=60, font=ctk.CTkFont(size=14, weight="bold"))
+        self.save_btn.grid(row=0, column=0, sticky="ew", padx=(0, 5))
 
-        self.print_btn = ctk.CTkButton(self.action_frame, text="Sistemden\nYazdır", command=self.print_image, fg_color="#1f538d", hover_color="#14375e")
-        self.print_btn.pack(side="right", fill="x", expand=True, padx=(5, 0))
+        self.print_btn = ctk.CTkButton(self.action_frame, text="Sistemden\nYazdır", command=self.print_image, 
+                                       fg_color="#1f538d", hover_color="#14375e", height=60, font=ctk.CTkFont(size=14, weight="bold"))
+        self.print_btn.grid(row=0, column=1, sticky="ew", padx=(5, 0))
+
+        # Alt bölme için boşluk (En son pack edilmeli ki kalan boşluğu doldursun)
+        self.spacer = ctk.CTkFrame(self.left_frame, fg_color="transparent")
+        self.spacer.pack(side="top", fill="both", expand=True)
 
     def setup_right_panel(self):
         self.right_frame = ctk.CTkFrame(self, corner_radius=10)
