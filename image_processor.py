@@ -1,11 +1,10 @@
 # image_processor.py
 from PIL import Image, ImageOps
-from config import PHOTO_WIDTH, PHOTO_HEIGHT
 
-def load_and_crop_image(image_path):
+def load_and_crop_image(image_path, target_width, target_height):
     """
     Kullanıcının seçtiği resmi yükler ve akıllı kırpma (ortalayarak) ile 
-    hedef boyutlara (PHOTO_WIDTH x PHOTO_HEIGHT) getirir.
+    hedef boyutlara (target_width x target_height) getirir.
     LANCZOS filtresi ile yüksek kalite korunur.
     """
     try:
@@ -17,7 +16,7 @@ def load_and_crop_image(image_path):
         # ImageOps.fit ile resmi merkeze hizalayarak kırpıp boyutlandırıyoruz
         cropped_img = ImageOps.fit(
              img, 
-             (PHOTO_WIDTH, PHOTO_HEIGHT), 
+             (target_width, target_height), 
              method=Image.Resampling.LANCZOS, 
              bleed=0.0, 
              centering=(0.5, 0.5)
@@ -25,6 +24,26 @@ def load_and_crop_image(image_path):
         return cropped_img
     except Exception as e:
         print(f"Resim işlenirken hata oluştu: {e}")
+        return None
+
+def apply_manual_crop(image_path, crop_box, target_width, target_height):
+    """
+    Orijinal resimden belirli bir dikdörtgen alanı (crop_box: left, top, right, bottom) kırpar 
+    ve bu alanı nihai baskı boyutu olan target_width x target_height boyutuna ölçekler.
+    """
+    try:
+        img = Image.open(image_path)
+        if img.mode != 'RGB':
+             img = img.convert('RGB')
+             
+        # Belirtilen alanı kırp
+        cropped_region = img.crop(crop_box)
+        
+        # Kesilen bölgeyi asıl yüksek çözünürlüklü hedef baskı ebadına genişlet/küçült
+        final_img = cropped_region.resize((target_width, target_height), Image.Resampling.LANCZOS)
+        return final_img
+    except Exception as e:
+        print(f"Manuel kırpma uygulanırken hata: {e}")
         return None
 
 def generate_layout_canvas(paper_width, paper_height, cropped_image, coordinates):

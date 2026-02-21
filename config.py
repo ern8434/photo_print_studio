@@ -1,8 +1,14 @@
 # config.py
 
-# Standart Vesikalık Boyutu (3.5 x 4.5 cm / 300 DPI)
-PHOTO_WIDTH = 413
-PHOTO_HEIGHT = 531
+# 300 DPI için Standart Vesikalık/Biyometrik Boyutları (Genişlik x Yükseklik piksel olarak)
+# Hesaplama: (cm / 2.54) * 300
+PHOTO_SIZES = {
+    'Biyometrik (5x6 cm)': (590, 708),
+    'Standart Vesikalık (4.5x6 cm)': (531, 708),
+    'Küçük Vesikalık (3.5x4.5 cm)': (413, 531),
+    'Amerikan / Hindistan (5x5 cm)': (590, 590),
+    'Geniş Vesikalık (6x9 cm)': (708, 1062)
+}
 
 # 300 DPI için Kağıt Boyutları (Genişlik x Yükseklik piksel olarak)
 PAPER_SIZES = {

@@ -1,7 +1,6 @@
 # layout_engine.py
-from config import PHOTO_WIDTH, PHOTO_HEIGHT
 
-def calculate_grid(paper_width, paper_height, margin, spacing=20):
+def calculate_grid(paper_width, paper_height, photo_width, photo_height, margin, spacing=20):
     """
     Verilen kağıt boyutu ve marjlara göre sığabilecek max satır ve sütun sayısını hesaplar.
     """
@@ -10,11 +9,11 @@ def calculate_grid(paper_width, paper_height, margin, spacing=20):
     
     # Sütun sayısı hesaplama
     # Her resim + sağındaki boşluk (son resim hariç)
-    # cols * PHOTO_WIDTH + (cols - 1) * spacing <= avail_width
-    # cols * (PHOTO_WIDTH + spacing) - spacing <= avail_width
+    # cols * photo_width + (cols - 1) * spacing <= avail_width
+    # cols * (photo_width + spacing) - spacing <= avail_width
     
-    cols = (avail_width + spacing) // (PHOTO_WIDTH + spacing)
-    rows = (avail_height + spacing) // (PHOTO_HEIGHT + spacing)
+    cols = (avail_width + spacing) // (photo_width + spacing)
+    rows = (avail_height + spacing) // (photo_height + spacing)
     
     # Negatif değerlere karşı güvenlik önlemi
     cols = max(0, cols)
@@ -31,7 +30,7 @@ def calculate_grid(paper_width, paper_height, margin, spacing=20):
         'spacing': spacing
     }
 
-def get_coordinates(grid_info, selected_count, margin, center_align=True):
+def get_coordinates(grid_info, photo_width, photo_height, selected_count, margin, center_align=True):
     """
     Seçilen resim adedine göre (ızgara yerleşimindeki) (x, y) başlangıç koordinatlarını döndürür.
     center_align True ise dökümanı kağıdın ortasına (merkeze) hizalar.
@@ -46,8 +45,8 @@ def get_coordinates(grid_info, selected_count, margin, center_align=True):
         
     # Kağıt üstünde ızgarayı ortalamak için başlangıç ofsetini hesapla
     if center_align and selected_count == grid_info['max_photos']:
-        total_grid_width = (cols * PHOTO_WIDTH) + ((cols - 1) * spacing)
-        total_grid_height = (rows * PHOTO_HEIGHT) + ((rows - 1) * spacing)
+        total_grid_width = (cols * photo_width) + ((cols - 1) * spacing)
+        total_grid_height = (rows * photo_height) + ((rows - 1) * spacing)
         
         start_x = margin + (grid_info['avail_width'] - total_grid_width) // 2
         start_y = margin + (grid_info['avail_height'] - total_grid_height) // 2
@@ -58,7 +57,7 @@ def get_coordinates(grid_info, selected_count, margin, center_align=True):
         
         # Eğer blok ortaya hizalanacaksa ve her satır eşit olacaksa
         if center_align:
-             total_grid_width = (cols * PHOTO_WIDTH) + ((cols - 1) * spacing)
+             total_grid_width = (cols * photo_width) + ((cols - 1) * spacing)
              start_x = margin + (grid_info['avail_width'] - total_grid_width) // 2
     
     count = 0
@@ -67,8 +66,8 @@ def get_coordinates(grid_info, selected_count, margin, center_align=True):
             if count >= selected_count:
                 break
             
-            x = start_x + col * (PHOTO_WIDTH + spacing)
-            y = start_y + row * (PHOTO_HEIGHT + spacing)
+            x = start_x + col * (photo_width + spacing)
+            y = start_y + row * (photo_height + spacing)
             coords.append((x, y))
             count += 1
             

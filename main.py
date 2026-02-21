@@ -6,9 +6,9 @@ import customtkinter as ctk
 from tkinter import filedialog, messagebox
 from PIL import Image, ImageTk
 
-from config import PAPER_SIZES, DEFAULT_MARGIN, PHOTO_WIDTH, PHOTO_HEIGHT
+from config import PAPER_SIZES, DEFAULT_MARGIN, PHOTO_SIZES
 from layout_engine import calculate_grid, get_coordinates
-from image_processor import load_and_crop_image, generate_layout_canvas, get_preview_image, save_high_quality
+from image_processor import load_and_crop_image, apply_manual_crop, generate_layout_canvas, get_preview_image, save_high_quality
 
 # Görünüm ayarları
 ctk.set_appearance_mode("System")
@@ -24,11 +24,17 @@ class PhotoPrintApp(ctk.CTk):
 
         # Durum değişkenleri
         self.selected_image_path = None
+        # Orijinal resim (kırpma arayüzü için) ve kırpılmış resim
+        self.original_image_pil = None
         self.cropped_image = None
+        self.current_crop_box = None # (left, top, right, bottom) orijinal resim üzerindeki alan
         self.current_canvas = None # Gerçek 300DPI tuval resmi
         
         self.paper_keys = list(PAPER_SIZES.keys())
         self.selected_paper_key = self.paper_keys[0] # Varsayılan: ilk kağıt
+        
+        self.photo_keys = list(PHOTO_SIZES.keys())
+        self.selected_photo_key = self.photo_keys[0] # Varsayılan: ilk fotoğraf boyutu
         
         # Grid bilgisi önbelleği
         self.current_grid_info = None
@@ -61,7 +67,28 @@ class PhotoPrintApp(ctk.CTk):
         self.img_btn.pack(pady=10, padx=20, fill="x")
 
         self.img_status_label = ctk.CTkLabel(self.left_frame, text="Henüz resim seçilmedi", font=ctk.CTkFont(size=12, slant="italic"))
-        self.img_status_label.pack(pady=(0, 20))
+        self.img_status_label.pack(pady=(0, 10))
+
+        # --- Kırpma Araçları ---
+        self.crop_frame = ctk.CTkFrame(self.left_frame, fg_color="transparent")
+        self.crop_frame.pack(fill="x", padx=20, pady=(0, 15))
+        
+        self.crop_frame.grid_columnconfigure(0, weight=1)
+        self.crop_frame.grid_columnconfigure(1, weight=1)
+        
+        self.manual_crop_btn = ctk.CTkButton(self.crop_frame, text="Manuel Kırp", command=self.open_manual_crop_ui, state="disabled")
+        self.manual_crop_btn.grid(row=0, column=0, sticky="ew", padx=(0, 5))
+        
+        self.auto_crop_btn = ctk.CTkButton(self.crop_frame, text="Otomatik Kırp", command=self.apply_auto_crop, state="disabled")
+        self.auto_crop_btn.grid(row=0, column=1, sticky="ew", padx=(5, 0))
+
+        # --- Fotoğraf Boyutu ---
+        self.photo_size_label = ctk.CTkLabel(self.left_frame, text="Fotoğraf Ebadı:")
+        self.photo_size_label.pack(anchor="w", padx=20)
+
+        self.photo_combo = ctk.CTkComboBox(self.left_frame, values=self.photo_keys, command=self.update_photo_selection)
+        self.photo_combo.set(self.selected_photo_key)
+        self.photo_combo.pack(pady=(5, 15), padx=20, fill="x")
 
         # --- Kağıt Boyutu ---
         self.paper_label = ctk.CTkLabel(self.left_frame, text="Kağıt Boyutu (300 DPI):")
@@ -133,10 +160,39 @@ class PhotoPrintApp(ctk.CTk):
             filename = os.path.basename(file_path)
             self.img_status_label.configure(text=f"Seçilen: {filename[:20]}...", text_color="green")
             
-            # Resmi akıllı kırp (3.5x4.5 cm / 300DPI = 413x531 px)
-            self.cropped_image = load_and_crop_image(self.selected_image_path)
+            # Orijinal resmi hafızaya al
+            try:
+                self.original_image_pil = Image.open(self.selected_image_path)
+                if self.original_image_pil.mode != 'RGB':
+                    self.original_image_pil = self.original_image_pil.convert('RGB')
+                
+                # Butonları aktif et
+                self.manual_crop_btn.configure(state="normal")
+                self.auto_crop_btn.configure(state="normal")
+                
+                # Yeni resim yüklendiğinde otomatik kırpmayı uygula
+                self.apply_auto_crop()
+            except Exception as e:
+                messagebox.showerror("Hata", f"Resim yüklenemedi: {e}")
+
+    def apply_auto_crop(self):
+        """Kırpma işlemini iptal edip merkeze odaklı standart otomatik kırpmaya döner."""
+        if not self.selected_image_path:
+            return
             
-            # Yeni resim yüklendiğinde, geçerli kağıt ve adet limitlerine göre önizlemeyi yenile
+        self.current_crop_box = None # Özel kırpmayı sıfırla
+        
+        target_w, target_h = PHOTO_SIZES[self.selected_photo_key]
+        self.cropped_image = load_and_crop_image(self.selected_image_path, target_w, target_h)
+        self.refresh_layout()
+
+    def update_photo_selection(self, choice):
+        self.selected_photo_key = choice
+        
+        # Boyut değişince de, eger manuel kırpma yoksa otomatik, varsa eski oran uymayacağı için tekrar merkeze kırp
+        if self.selected_image_path:
+            self.apply_auto_crop()
+        else:
             self.refresh_layout()
 
     def update_paper_selection(self, choice):
@@ -165,11 +221,12 @@ class PhotoPrintApp(ctk.CTk):
         Önizleme tuvalini çizer. update_sliders True ise max slider limitlerini
         matematiğe göre baştan yapılandırır.
         """
-        # Kağıt, marj ve gridi hesapla
+        # Kağıt, fotoğraf, marj ve gridi hesapla
         paper_w, paper_h = PAPER_SIZES[self.selected_paper_key]
+        photo_w, photo_h = PHOTO_SIZES[self.selected_photo_key]
         margin = int(self.margin_slider.get())
         
-        self.current_grid_info = calculate_grid(paper_w, paper_h, margin)
+        self.current_grid_info = calculate_grid(paper_w, paper_h, photo_w, photo_h, margin)
         max_photos = self.current_grid_info['max_photos']
         
         if update_sliders:
@@ -204,7 +261,7 @@ class PhotoPrintApp(ctk.CTk):
         
         # Sadece resim ve koordinatlar hazırsa oluştur
         if self.cropped_image and selected_count > 0:
-             coords = get_coordinates(self.current_grid_info, selected_count, margin, center_align=True)
+             coords = get_coordinates(self.current_grid_info, photo_w, photo_h, selected_count, margin, center_align=True)
              self.current_canvas = generate_layout_canvas(paper_w, paper_h, self.cropped_image, coords)
              self.draw_preview(self.current_canvas)
         else:
@@ -274,6 +331,143 @@ class PhotoPrintApp(ctk.CTk):
             messagebox.showinfo("Baskı", "Baskı emri (veya önizleme penceresi) sisteminize gönderildi.")
         except Exception as e:
             messagebox.showerror("Hata", f"Yazdırma işlemi başarısız: {e}\n\nLütfen önce 'Kaydet' yapıp elle yazdırmayı deneyin.")
+
+    # --- Kırpma (Crop) Arayüzü ---
+    
+    def open_manual_crop_ui(self):
+        if not self.original_image_pil:
+            return
+
+        crop_win = ctk.CTkToplevel(self)
+        crop_win.title("Manuel Kırpma Aracı")
+        crop_win.geometry("800x600")
+        crop_win.transient(self) # Ana pencereye bağla
+
+        # Ekranı hazırla
+        target_w, target_h = PHOTO_SIZES[self.selected_photo_key]
+        target_ratio = target_w / target_h
+
+        # Görüntü boyutunu ekrana sığacak şekilde ölçekle (Örn: max 500 yüksekliğinde)
+        orig_w, orig_h = self.original_image_pil.size
+        display_h = 500
+        scale_factor = display_h / orig_h
+        display_w = int(orig_w * scale_factor)
+
+        display_pil = self.original_image_pil.resize((display_w, display_h), Image.Resampling.LANCZOS)
+        display_img = ImageTk.PhotoImage(display_pil)
+        
+        # Onayla ve İptal Buton Çerçevesi (Pack olayında önce ekleyelim ki alta sabitlensin ve boşluk kalmamasına karşı güvende olsun)
+        btn_frame = ctk.CTkFrame(crop_win, fg_color="transparent")
+        btn_frame.pack(side="bottom", fill="x", padx=20, pady=20)
+        
+        def save_crop():
+            cx1, cy1, cx2, cy2 = cvs.coords(rect_id)
+            # Gerçek resim koordinatlarına çevir
+            real_x1 = cx1 / scale_factor
+            real_y1 = cy1 / scale_factor
+            real_x2 = cx2 / scale_factor
+            real_y2 = cy2 / scale_factor
+            
+            self.current_crop_box = (int(real_x1), int(real_y1), int(real_x2), int(real_y2))
+            
+            # Kırpmayı uygula
+            self.cropped_image = apply_manual_crop(self.selected_image_path, self.current_crop_box, target_w, target_h)
+            self.refresh_layout()
+            crop_win.destroy()
+
+        ok_btn = ctk.CTkButton(btn_frame, text="Onayla", command=save_crop, fg_color="#2b7b46", hover_color="#1f5c34")
+        ok_btn.pack(side="right", padx=5)
+        cancel_btn = ctk.CTkButton(btn_frame, text="İptal", command=crop_win.destroy, fg_color="#a83232", hover_color="#7a2424")
+        cancel_btn.pack(side="right", padx=5)
+
+        # Tkinter Canvas (Üstte kalan tüm boşluğu doldursun)
+        import tkinter as tk
+        canvas_frame = ctk.CTkFrame(crop_win)
+        canvas_frame.pack(fill="both", expand=True, padx=20, pady=20)
+        
+        cvs = tk.Canvas(canvas_frame, width=display_w, height=display_h, bg="gray", highlightthickness=0)
+        cvs.pack(anchor="center")
+        cvs.create_image(0, 0, anchor="nw", image=display_img)
+        cvs.image_ref = display_img # Garbage collector
+
+        # Başlangıç kırpma kutusu
+        box_w = int(display_w * 0.8)
+        box_h = int(box_w / target_ratio)
+        if box_h > display_h * 0.8:
+            box_h = int(display_h * 0.8)
+            box_w = int(box_h * target_ratio)
+
+        start_x = (display_w - box_w) // 2
+        start_y = (display_h - box_h) // 2
+
+        # Çerçeve çizimi
+        rect_id = cvs.create_rectangle(start_x, start_y, start_x + box_w, start_y + box_h, outline="red", width=3, dash=(5, 5))
+
+        # Kontrolcü sınıfı (Fare işlemleri için)
+        class CropController:
+            def __init__(self, canvas, rect, aspect_ratio, max_w, max_h):
+                self.canvas = canvas
+                self.rect = rect
+                self.ratio = aspect_ratio
+                self.max_w = max_w
+                self.max_h = max_h
+                self.dragging = False
+                self.resizing = False
+                self.last_x = 0
+                self.last_y = 0
+
+            def on_press(self, event):
+                x1, y1, x2, y2 = self.canvas.coords(self.rect)
+                self.last_x = event.x
+                self.last_y = event.y
+                
+                # Sağ alt köşeye yakınsa boyutlandır
+                if (x2 - 15 <= event.x <= x2 + 15) and (y2 - 15 <= event.y <= y2 + 15):
+                    self.resizing = True
+                # İçindeyse taşı
+                elif x1 < event.x < x2 and y1 < event.y < y2:
+                    self.dragging = True
+
+            def on_release(self, event):
+                self.dragging = False
+                self.resizing = False
+
+            def on_motion(self, event):
+                x1, y1, x2, y2 = self.canvas.coords(self.rect)
+                dx = event.x - self.last_x
+                dy = event.y - self.last_y
+
+                if self.dragging:
+                    # Sınır kontrolleriyle taşı
+                    if x1 + dx < 0: dx = -x1
+                    if y1 + dy < 0: dy = -y1
+                    if x2 + dx > self.max_w: dx = self.max_w - x2
+                    if y2 + dy > self.max_h: dy = self.max_h - y2
+                    self.canvas.move(self.rect, dx, dy)
+                    self.last_x += dx
+                    self.last_y += dy
+
+                elif self.resizing:
+                    # Sınırla orantılı boyutlandır
+                    new_w = (x2 - x1) + dx
+                    new_h = new_w / self.ratio
+                    
+                    if x1 + new_w <= self.max_w and y1 + new_h <= self.max_h and new_w > 50:
+                        self.canvas.coords(self.rect, x1, y1, x1 + new_w, y1 + new_h)
+                        self.last_x = event.x
+                        self.last_y = event.y
+
+        controller = CropController(cvs, rect_id, target_ratio, display_w, display_h)
+        cvs.bind("<ButtonPress-1>", controller.on_press)
+        cvs.bind("<ButtonRelease-1>", controller.on_release)
+        cvs.bind("<B1-Motion>", controller.on_motion)
+
+        # Bilgi etiketi
+        info = ctk.CTkLabel(crop_win, text="Çerçevenin içinden sürükleyerek taşıyın.\nSağ alt köşesinden sürükleyerek orantılı boyutlandırın.", text_color="gray")
+        info.pack(side="bottom", pady=5)
+        
+        # Pencere tamamen çizildikten sonra odağı yakala (grab_set hatasını önlemek için)
+        crop_win.after(100, crop_win.grab_set)
 
 
 if __name__ == "__main__":
