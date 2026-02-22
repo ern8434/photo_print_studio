@@ -106,15 +106,24 @@ class PhotoPrintApp(ctk.CTk):
         self.margin_slider.set(DEFAULT_MARGIN)
         self.margin_slider.pack(pady=(5, 20), padx=20, fill="x")
 
-        # --- Adet Sürgüsü ---
-        self.count_label = ctk.CTkLabel(self.left_frame, text="Adet (1):")
+        # --- Adet Girişi ---
+        self.count_label = ctk.CTkLabel(self.left_frame, text="Adet:")
         self.count_label.pack(anchor="w", padx=20)
 
-        # Başlangıçta 1-1, resim seçildiğinde ve kağıt hesaplandığında güncellenir
-        self.count_slider = ctk.CTkSlider(self.left_frame, from_=1, to=2, number_of_steps=1, command=self.update_count_label)
-        self.count_slider.set(1)
-        self.count_slider.pack(pady=(5, 5), padx=20, fill="x")
-        
+        self.count_frame = ctk.CTkFrame(self.left_frame, fg_color="transparent")
+        self.count_frame.pack(pady=(5, 5), padx=20, fill="x")
+
+        self.minus_btn = ctk.CTkButton(self.count_frame, text="-", width=40, font=ctk.CTkFont(size=20, weight="bold"), command=self.decrement_count)
+        self.minus_btn.pack(side="left")
+
+        self.count_entry = ctk.CTkEntry(self.count_frame, width=80, justify="center", font=ctk.CTkFont(size=14))
+        self.count_entry.insert(0, "1")
+        self.count_entry.bind("<KeyRelease>", self.on_count_change_from_entry)
+        self.count_entry.pack(side="left", padx=10)
+
+        self.plus_btn = ctk.CTkButton(self.count_frame, text="+", width=40, font=ctk.CTkFont(size=20, weight="bold"), command=self.increment_count)
+        self.plus_btn.pack(side="left")
+
         self.max_count_label = ctk.CTkLabel(self.left_frame, text="Max: 1 adet sığabilir", text_color="gray", font=ctk.CTkFont(size=11))
         self.max_count_label.pack(pady=(0, 20), anchor="w", padx=20)
         
@@ -207,12 +216,45 @@ class PhotoPrintApp(ctk.CTk):
         # ama ctk slider sürekli komut atar, optimize bir çözüm için doğrudan bağlıyoruz:
         self.refresh_layout()
         
-    def update_count_label(self, value):
-        count_val = int(value)
+    def get_current_count(self):
+        try:
+            return int(self.count_entry.get())
+        except ValueError:
+            return 1
+
+    def decrement_count(self):
+        curr = self.get_current_count()
+        if curr > 1:
+            self.count_entry.delete(0, 'end')
+            self.count_entry.insert(0, str(curr - 1))
+            self.refresh_layout(update_sliders=False)
+
+    def increment_count(self):
+        curr = self.get_current_count()
+        max_photos = getattr(self, 'current_max_photos', 1)
+        if curr < max_photos:
+            self.count_entry.delete(0, 'end')
+            self.count_entry.insert(0, str(curr + 1))
+            self.refresh_layout(update_sliders=False)
+
+    def on_count_change_from_entry(self, event):
+        if not self.count_entry.get().strip():
+            return
+        curr = self.get_current_count()
+        max_photos = getattr(self, 'current_max_photos', 1)
         
-        # Max limiti aşmasını slider kendisi koruyor (to=max_val sayesinde)
-        # Sadece görseli yeniliyoruz.
-        self.count_label.configure(text=f"Adet ({count_val}):")
+        changed = False
+        if curr > max_photos:
+            curr = max_photos
+            changed = True
+        elif curr < 1:
+            curr = 1
+            changed = True
+            
+        if changed:
+            self.count_entry.delete(0, 'end')
+            self.count_entry.insert(0, str(curr))
+            
         self.refresh_layout(update_sliders=False)
 
     def refresh_layout(self, update_sliders=True):
@@ -228,28 +270,38 @@ class PhotoPrintApp(ctk.CTk):
         
         self.current_grid_info = calculate_grid(paper_w, paper_h, photo_w, photo_h, margin)
         max_photos = self.current_grid_info['max_photos']
+        self.current_max_photos = max_photos
         
         if update_sliders:
-            # Sığacak duruma göre UI Slider limitlerini güncelle
             if max_photos < 1:
-                # Sığmıyorsa
-                self.count_slider.configure(from_=0, to=0, number_of_steps=1)
-                self.count_slider.set(0)
-                self.count_label.configure(text=f"Adet (0):")
+                self.count_entry.delete(0, 'end')
+                self.count_entry.insert(0, "0")
+                self.minus_btn.configure(state="disabled")
+                self.plus_btn.configure(state="disabled")
+                self.count_entry.configure(state="disabled")
                 self.max_count_label.configure(text="Bu boşlukla resim sığmıyor!", text_color="red")
             else:
-                self.count_slider.configure(from_=1, to=max_photos, number_of_steps=max(1, max_photos-1))
+                self.minus_btn.configure(state="normal")
+                self.plus_btn.configure(state="normal")
+                self.count_entry.configure(state="normal")
                 
-                # Mevcut slider değeri max değerden büyükse aşağı çek
-                curr_val = int(self.count_slider.get())
-                if curr_val > max_photos:
-                     self.count_slider.set(max_photos)
-                     curr_val = max_photos
-                elif curr_val == 0:
-                     self.count_slider.set(1)
-                     curr_val = 1
-                     
-                self.count_label.configure(text=f"Adet ({curr_val}):")
+                try:
+                    curr_val = int(self.count_entry.get())
+                except ValueError:
+                    curr_val = max_photos
+
+                if getattr(self, 'last_max_photos', 0) == 0:
+                    curr_val = max_photos
+                else:
+                    if curr_val > max_photos:
+                         curr_val = max_photos
+                    elif curr_val < 1:
+                         curr_val = 1
+
+                self.last_max_photos = max_photos
+                
+                self.count_entry.delete(0, 'end')
+                self.count_entry.insert(0, str(curr_val))
                 self.max_count_label.configure(text=f"Max: {max_photos} adet sığabilir", text_color="gray")
 
         # Resmi çizme evresi
@@ -257,7 +309,7 @@ class PhotoPrintApp(ctk.CTk):
             self.draw_preview(None)
             return
 
-        selected_count = int(self.count_slider.get())
+        selected_count = self.get_current_count()
         
         # Sadece resim ve koordinatlar hazırsa oluştur
         if self.cropped_image and selected_count > 0:

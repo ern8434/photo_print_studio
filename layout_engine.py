@@ -44,9 +44,12 @@ def get_coordinates(grid_info, photo_width, photo_height, selected_count, margin
         return coords
         
     # Kağıt üstünde ızgarayı ortalamak için başlangıç ofsetini hesapla
-    if center_align and selected_count == grid_info['max_photos']:
-        total_grid_width = (cols * photo_width) + ((cols - 1) * spacing)
-        total_grid_height = (rows * photo_height) + ((rows - 1) * spacing)
+    if center_align:
+        actual_cols = min(cols, selected_count)
+        actual_rows = (selected_count + cols - 1) // cols
+        
+        total_grid_width = (actual_cols * photo_width) + ((actual_cols - 1) * spacing)
+        total_grid_height = (actual_rows * photo_height) + ((actual_rows - 1) * spacing)
         
         start_x = margin + (grid_info['avail_width'] - total_grid_width) // 2
         start_y = margin + (grid_info['avail_height'] - total_grid_height) // 2
@@ -54,11 +57,6 @@ def get_coordinates(grid_info, photo_width, photo_height, selected_count, margin
         # Basitçe sol üstten başla
         start_x = margin
         start_y = margin
-        
-        # Eğer blok ortaya hizalanacaksa ve her satır eşit olacaksa
-        if center_align:
-             total_grid_width = (cols * photo_width) + ((cols - 1) * spacing)
-             start_x = margin + (grid_info['avail_width'] - total_grid_width) // 2
     
     count = 0
     for row in range(rows):
