@@ -2,3 +2,6 @@
 .idea
 __pycache__
 print_temp.jpg
+build
+main.spec
+
