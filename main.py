@@ -4,7 +4,11 @@ import platform
 import subprocess
 import customtkinter as ctk
 from tkinter import filedialog, messagebox
-from PIL import Image, ImageTk
+import tkinter as tk
+from PIL import Image, ImageTk, ImageWin
+
+# Load window icon
+icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logo.png")
 
 from config import PAPER_SIZES, DEFAULT_MARGIN, PHOTO_SIZES
 from layout_engine import calculate_grid, get_coordinates
@@ -21,6 +25,14 @@ class PhotoPrintApp(ctk.CTk):
         self.title("Fotoğraf Baskı Yerleşim Otomasyonu")
         self.geometry("1100x750")
         self.minsize(900, 600)
+
+        # Set window icon
+        if os.path.exists(icon_path):
+            try:
+                icon_photo = tk.PhotoImage(file=icon_path)
+                self.iconphoto(True, icon_photo)
+            except Exception:
+                pass
 
         # Durum değişkenleri
         self.selected_image_path = None
